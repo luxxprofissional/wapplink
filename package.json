@@ -1,0 +1,74 @@
+{
+  "name": "wapplink",
+  "productName": "WappLink",
+  "version": "1.1.0",
+  "description": "Varias contas de WhatsApp Web em uma janela so",
+  "main": "src/main.js",
+  "author": "Luxx",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "icon": "electron tools/make-icon.js",
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "release": "node tools/release.js",
+    "release:publish": "node tools/release.js --publish"
+  },
+  "build": {
+    "appId": "com.luxx.zapbox",
+    "productName": "WappLink",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.ico",
+      "build/icon.png",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "luxxprofissional",
+        "repo": "wapplink",
+        "releaseType": "draft"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon-mac.png",
+      "category": "public.app-category.social-networking"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "WappLink",
+      "createDesktopShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

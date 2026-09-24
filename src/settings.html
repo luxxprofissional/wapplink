@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>WappLink - contas e tela</title>
+<style>
+  :root {
+    --bg: #10161d;
+    --line: #1e2731;
+    --ink: #d7dee6;
+    --ink-dim: #6f7d8c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #26313d;
+  }
+
+  header {
+    -webkit-app-region: drag;
+    display: flex; align-items: center;
+    padding: 12px 14px 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  header .t {
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  header button {
+    -webkit-app-region: no-drag;
+    margin-left: auto;
+    width: 24px; height: 24px;
+    border: 0; border-radius: 6px;
+    background: transparent; color: var(--ink-dim);
+    font-size: 15px; line-height: 1; cursor: pointer;
+  }
+  header button:hover { background: rgba(255,255,255,.07); color: var(--ink); }
+
+  main { flex: 1; overflow-y: auto; padding: 16px; }
+  main::-webkit-scrollbar { width: 8px; }
+  main::-webkit-scrollbar-thumb { background: #202a35; border-radius: 4px; }
+
+  h2 {
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 10px;
+  }
+  section + section { margin-top: 22px; }
+
+  /* ------------------------------------------------------ modos de tela */
+  .modes { display: flex; gap: 8px; }
+  .mode {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 10px 4px 8px;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    font: 11.5px "Segoe UI", system-ui, sans-serif;
+  }
+  .mode:hover { border-color: #2c3947; color: var(--ink); }
+  .mode.on { border-color: #3c5f86; background: #16202b; color: var(--ink); }
+  .mode svg rect { fill: currentColor; opacity: .55; }
+  .mode.on svg rect { opacity: .9; }
+  .hint { color: var(--ink-dim); font-size: 11.5px; margin-top: 9px; line-height: 1.7; }
+
+  /* ------------------------------------------------------ contas */
+  .acc {
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 7px 8px;
+    margin: 0 -8px;
+  }
+  .acc.drop-before { box-shadow: 0 -2px 0 -1px #3c5f86; }
+  .acc.drop-after { box-shadow: 0 2px 0 -1px #3c5f86; }
+  .acc.dragging { opacity: .4; }
+  .acc.open { border-color: var(--line); background: #131b23; }
+
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grip {
+    color: #3a4753; cursor: grab;
+    font-size: 13px; line-height: 1; letter-spacing: -1px;
+    padding: 2px 1px;
+  }
+  .pic {
+    width: 38px; height: 38px; flex: 0 0 38px;
+    border-radius: 11px;
+    background: rgba(255,255,255,.05) center/cover no-repeat;
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    font-size: 12px; font-weight: 600; letter-spacing: .5px;
+    color: var(--ink-dim);
+    cursor: pointer;
+    position: relative;
+  }
+  .pic:hover { border-color: #33414f; }
+  .pic.has span { display: none; }
+  .name {
+    flex: 1; min-width: 0;
+    background: transparent; border: 0;
+    border-bottom: 1px solid transparent;
+    color: var(--ink);
+    font: 500 13.5px "Segoe UI", system-ui, sans-serif;
+    padding: 3px 0 4px;
+    outline: none;
+    -webkit-user-select: text;
+  }
+  .name:hover { border-bottom-color: var(--line); }
+  .name:focus { border-bottom-color: var(--ink-dim); }
+
+  .icon {
+    width: 26px; height: 26px; flex: 0 0 26px;
+    border: 1px solid var(--line); border-radius: 7px;
+    background: transparent; color: var(--ink-dim);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .icon:hover { color: var(--ink); border-color: #33414f; }
+  .icon.on { color: #7fd8a2; border-color: #2f5b43; background: #14241b; }
+  .chev { border: 0; background: transparent; color: #495764; cursor: pointer; padding: 4px; }
+  .chev:hover { color: var(--ink); }
+
+  .more { display: none; padding: 11px 0 3px 48px; }
+  .acc.open .more { display: block; }
+  .swatches { display: flex; gap: 7px; margin-bottom: 11px; }
+  .sw {
+    width: 15px; height: 15px; border-radius: 4px;
+    border: 1px solid rgba(255,255,255,.14);
+    cursor: pointer; opacity: .5;
+  }
+  .sw:hover { opacity: .85; }
+  .sw.on { opacity: 1; box-shadow: 0 0 0 2px #131b23, 0 0 0 3px currentColor; }
+  .acts { display: flex; flex-wrap: wrap; gap: 14px; }
+  .acts button {
+    background: none; border: 0; padding: 0;
+    color: var(--ink-dim);
+    font: 12px "Segoe UI", system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .acts button:hover { color: var(--ink); }
+  .acts button.danger:hover { color: #d97a7a; }
+
+  #add {
+    width: 100%;
+    margin-top: 12px;
+    border: 1px dashed #26313d; border-radius: 8px;
+    background: transparent; color: var(--ink-dim);
+    padding: 9px; cursor: pointer;
+    font: 12.5px "Segoe UI", system-ui, sans-serif;
+  }
+  #add:hover:not(:disabled) { border-color: #3c5f86; color: var(--ink); }
+  #add:disabled { opacity: .45; cursor: default; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 12px 16px 14px;
+    color: var(--ink-dim);
+    font-size: 11.5px;
+    line-height: 1.9;
+  }
+  footer label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-bottom: 6px; }
+  footer kbd {
+    font: 11px ui-monospace, Consolas, monospace;
+    color: var(--ink);
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="t">Contas e tela</span>
+  <button id="x" title="Fechar (Esc)">&times;</button>
+</header>
+
+<main>
+  <section>
+    <h2>Tela</h2>
+    <div class="modes">
+      <button class="mode" data-mode="focus">
+        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="32" height="20" rx="2"/></svg>
+        Uma conta
+      </button>
+      <button class="mode" data-mode="cols">
+        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="15" height="20" rx="2"/><rect x="18" y="1" width="15" height="20" rx="2"/></svg>
+        Colunas
+      </button>
+      <button class="mode" data-mode="rows">
+        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="32" height="9" rx="2"/><rect x="1" y="12" width="32" height="9" rx="2"/></svg>
+        Linhas
+      </button>
+    </div>
+    <div class="hint" id="modehint"></div>
+  </section>
+
+  <section>
+    <h2>Contas</h2>
+    <div id="list"></div>
+    <button id="add">+ Adicionar conta</button>
+  </section>
+</main>
+
+<footer>
+  <label><input type="checkbox" id="listonly"> Painel estreito mostra só a lista</label>
+  <label><input type="checkbox" id="tray"> Fechar minimiza para a bandeja</label>
+  <div><kbd>Ctrl</kbd>+<kbd>1</kbd>..<kbd>9</kbd> foca conta &middot; <kbd>Ctrl</kbd>+<kbd>D</kbd> divide</div>
+  <div><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> foco, colunas, linhas</div>
+</footer>
+
+<script>
+  let state = { accounts: [], layout: { mode: 'focus', panes: [] }, palette: [], maxAccounts: 8, closeToTray: true }
+  let openId = null
+  let dragId = null
+
+  const $list = document.getElementById('list')
+  const $hint = document.getElementById('modehint')
+
+  const initials = (name) => {
+    const parts = String(name || '?').trim().split(/\s+/)
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase()
+  }
+
+  const HINTS = {
+    focus: 'Uma conta por vez. Clicar no rail troca de conta.',
+    cols: 'Contas lado a lado. Ctrl+clique no rail põe ou tira da tela; arraste a divisória pra mudar a proporção.',
+    rows: 'Contas empilhadas. Ctrl+clique no rail põe ou tira da tela; arraste a divisória pra mudar a proporção.'
+  }
+
+  function renderModes () {
+    document.querySelectorAll('.mode').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.mode === state.layout.mode)
+      btn.onclick = () => zap.mode(btn.dataset.mode)
+    })
+    $hint.textContent = HINTS[state.layout.mode] || ''
+  }
+
+  function renderList () {
+    $list.innerHTML = ''
+    state.accounts.forEach((acc, index) => {
+      const box = document.createElement('div')
+      box.className = 'acc' + (openId === acc.id ? ' open' : '')
+      box.draggable = true
+      box.dataset.id = acc.id
+      box.dataset.index = index
+
+      // ------------------------------------------------ linha principal
+      const row = document.createElement('div')
+      row.className = 'row'
+
+      const grip = document.createElement('span')
+      grip.className = 'grip'
+      grip.textContent = '⠿'
+      grip.title = 'Arraste pra reordenar'
+      row.appendChild(grip)
+
+      const pic = document.createElement('div')
+      pic.className = 'pic' + (acc.avatar ? ' has' : '')
+      pic.title = acc.avatar ? 'Trocar a foto' : 'Escolher uma foto'
+      if (acc.avatar) pic.style.backgroundImage = 'url(' + acc.avatar + ')'
+      pic.style.borderColor = acc.color + '59'
+      pic.innerHTML = '<span>' + initials(acc.name) + '</span>'
+      pic.onclick = () => zap.avatar(acc.id)
+      row.appendChild(pic)
+
+      const name = document.createElement('input')
+      name.className = 'name'
+      name.value = acc.name
+      name.maxLength = 24
+      name.spellcheck = false
+      name.onkeydown = (e) => { if (e.key === 'Enter') name.blur() }
+      name.onblur = () => {
+        const v = name.value.trim()
+        if (!v) { name.value = acc.name; return }
+        if (v !== acc.name) zap.rename(acc.id, v)
+      }
+      row.appendChild(name)
+
+      const onScreen = document.createElement('button')
+      onScreen.className = 'icon' + (acc.onScreen ? ' on' : '')
+      onScreen.title = acc.onScreen ? 'Está na tela — clique pra tirar' : 'Pôr na tela'
+      onScreen.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+        '<rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20h8"/></svg>'
+      onScreen.onclick = () => zap.togglePane(acc.id)
+      row.appendChild(onScreen)
+
+      const chev = document.createElement('button')
+      chev.className = 'chev'
+      chev.title = 'Mais opções'
+      chev.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">' +
+        '<path d="M6 9l6 6 6-6"/></svg>'
+      chev.style.transform = openId === acc.id ? 'rotate(180deg)' : ''
+      chev.onclick = () => { openId = openId === acc.id ? null : acc.id; renderList() }
+      row.appendChild(chev)
+
+      box.appendChild(row)
+
+      // ------------------------------------------------ area expandida
+      const more = document.createElement('div')
+      more.className = 'more'
+
+      const sw = document.createElement('div')
+      sw.className = 'swatches'
+      state.palette.forEach(color => {
+        const dot = document.createElement('div')
+        dot.className = 'sw' + (color.toLowerCase() === String(acc.color).toLowerCase() ? ' on' : '')
+        dot.style.background = color
+        dot.style.color = color
+        dot.onclick = () => zap.color(acc.id, color)
+        sw.appendChild(dot)
+      })
+      more.appendChild(sw)
+
+      const acts = document.createElement('div')
+      acts.className = 'acts'
+      const mk = (label, fn, danger) => {
+        const b = document.createElement('button')
+        b.textContent = label
+        if (danger) b.className = 'danger'
+        b.onclick = fn
+        return b
+      }
+      acts.appendChild(mk('Recarregar', () => zap.reload(acc.id)))
+      if (acc.avatar) acts.appendChild(mk('Tirar foto', () => zap.avatarClear(acc.id)))
+      acts.appendChild(mk('Desconectar', () => zap.logout(acc.id), true))
+      if (state.accounts.length > 1) acts.appendChild(mk('Remover conta', () => zap.remove(acc.id), true))
+      more.appendChild(acts)
+
+      box.appendChild(more)
+
+      // ------------------------------------------------ reordenar
+      box.ondragstart = (e) => {
+        dragId = acc.id
+        box.classList.add('dragging')
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', acc.id)
+      }
+      box.ondragend = () => {
+        dragId = null
+        document.querySelectorAll('.acc').forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after'))
+      }
+      box.ondragover = (e) => {
+        if (!dragId || dragId === acc.id) return
+        e.preventDefault()
+        const after = e.offsetY > box.offsetHeight / 2
+        document.querySelectorAll('.acc').forEach(el => el.classList.remove('drop-before', 'drop-after'))
+        box.classList.add(after ? 'drop-after' : 'drop-before')
+      }
+      box.ondrop = (e) => {
+        if (!dragId || dragId === acc.id) return
+        e.preventDefault()
+        const from = state.accounts.findIndex(a => a.id === dragId)
+        const after = e.offsetY > box.offsetHeight / 2
+        let target = after ? index + 1 : index
+        if (from < target) target -= 1
+        zap.reorder(dragId, target)
+      }
+
+      $list.appendChild(box)
+    })
+
+    const add = document.getElementById('add')
+    add.disabled = state.accounts.length >= state.maxAccounts
+    add.textContent = add.disabled
+      ? 'Limite de ' + state.maxAccounts + ' contas'
+      : '+ Adicionar conta'
+  }
+
+  document.getElementById('add').onclick = () => zap.add()
+  document.getElementById('x').onclick = () => zap.close()
+  document.getElementById('tray').onchange = (e) => zap.closeToTray(e.target.checked)
+  document.getElementById('listonly').onchange = (e) => zap.listOnly(e.target.checked)
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') zap.close() })
+
+  zap.onState((s) => {
+    state = s
+    if (openId && !s.accounts.some(a => a.id === openId)) openId = null
+    document.getElementById('tray').checked = !!s.closeToTray
+    document.getElementById('listonly').checked = !!s.listOnly
+    renderModes()
+    renderList()
+  })
+
+  zap.ready()
+</script>
+</body>
+</html>

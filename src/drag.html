@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>arrastar divisoria</title>
+<style>
+  html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+  body { cursor: col-resize; }
+  body.rows { cursor: row-resize; }
+</style>
+</head>
+<body>
+<script>
+  const dir = new URLSearchParams(location.search).get('dir')
+  if (dir === 'rows') document.body.classList.add('rows')
+
+  addEventListener('mousemove', (e) => drag.move(e.clientX, e.clientY))
+  addEventListener('mouseup', () => drag.up())
+  addEventListener('blur', () => drag.up())
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') drag.up() })
+</script>
+</body>
+</html>
