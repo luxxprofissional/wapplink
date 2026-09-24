@@ -4,192 +4,77 @@
 <meta charset="utf-8">
 <title>WappLink</title>
 <style>
+  /* a pagina so aparece na barra de titulo e nas divisorias; o resto da janela
+     e coberto pelas contas. As cores vem da coluna do WhatsApp da conta focada. */
   :root {
-    --bg: #0d1116;
-    --rail: #0f151b;
-    --line: #1b232c;
-    --ink: #d7dee6;
-    --ink-dim: #6f7d8c;
-    --unread: #25d366;
+    --bg: rgb(247, 245, 243);
+    --ink: 0, 0, 0;
   }
+  :root.dark { --ink: 255, 255, 255; }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
   body {
     background: var(--bg);
-    color: var(--ink);
-    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    color: rgba(var(--ink), .6);
+    font: 12px/1 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-user-select: none;
   }
 
-  /* ---------------------------------------------------------- rail */
-  #rail {
+  /* ---------------------------------------------------------- barra de titulo */
+  #bar {
     position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 72px;
-    background: var(--rail);
-    border-right: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 14px 0 10px;
+    left: 0; right: 0; top: 0;
+    height: 32px;
+    -webkit-app-region: drag;
+    display: flex; align-items: center; justify-content: center;
   }
-  #tabs {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    overflow-y: auto;
-    scrollbar-width: none;
-    padding-bottom: 8px;
+  #title {
+    max-width: 50%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 500;
+    letter-spacing: .1px;
   }
-  #tabs::-webkit-scrollbar { width: 0; }
-
-  .tab {
-    position: relative;
-    flex: 0 0 auto;
-    width: 46px; height: 46px;
-    border-radius: 13px;
-    background: rgba(255,255,255,.045) center/cover no-repeat;
-    border: 1px solid transparent;
-    display: grid; place-items: center;
-    cursor: pointer;
-    transition: background-color .12s ease, border-color .12s ease;
-  }
-  .tab:hover { border-color: rgba(255,255,255,.16); }
-  .tab .mono {
-    font-size: 13px; font-weight: 600; letter-spacing: .6px;
-    color: var(--ink-dim);
-    transition: color .12s ease;
-  }
-  .tab.on .mono, .tab.active .mono { color: var(--ink); }
-  .tab.photo .mono { display: none; }
-
-  /* barra cheia = conta focada; tracinho = so aparecendo na tela dividida */
-  .tab .bar {
-    position: absolute;
-    left: -13px; top: 50%;
-    width: 3px; height: 0;
-    border-radius: 0 2px 2px 0;
-    transform: translateY(-50%);
-    transition: height .14s ease;
-  }
-  .tab.on .bar { height: 12px; }
-  .tab.active .bar { height: 26px; }
-
-  .tab .badge {
-    position: absolute;
-    top: -5px; right: -5px;
-    min-width: 18px; height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--unread);
-    color: #06130b;
-    font-size: 10.5px; font-weight: 700;
-    line-height: 18px; text-align: center;
-    border: 2px solid var(--rail);
-    display: none;
-  }
-  .tab .badge.show { display: block; }
-
-  #gear {
-    margin-top: auto;
-    width: 34px; height: 34px;
-    border: 0; border-radius: 9px;
-    background: transparent;
-    color: var(--ink-dim);
-    display: grid; place-items: center;
-    cursor: pointer;
-    flex: 0 0 auto;
-  }
-  #gear:hover { background: rgba(255,255,255,.06); color: var(--ink); }
-
-  /* ---------------------------------------------------------- molduras */
-  /* a view da conta recua 3px, entao o que sobra desses retangulos e um
-     contorno na cor da conta - o resto fica coberto pelo WhatsApp */
-  .frame {
-    position: absolute;
-    pointer-events: none;
-    border-radius: 4px;
-  }
+  #title .dim { opacity: .55; font-weight: 400; }
 
   /* ---------------------------------------------------------- divisorias */
-  /* so os pixels de folga entre os paineis chegam ate aqui: o resto da
-     janela esta coberto pelas views do WhatsApp */
-  .gutter {
-    position: absolute;
-    background: var(--bg);
-  }
+  /* so a folga entre os paineis chega ate aqui: o resto e WhatsApp */
+  .gutter { position: absolute; }
   .gutter::after {
     content: "";
     position: absolute;
-    inset: 0;
-    background: var(--line);
+    background: rgba(var(--ink), .1);
     transition: background-color .12s ease;
   }
-  .gutter:hover::after, .gutter.dragging::after { background: #35506b; }
+  .gutter:hover::after, .gutter.dragging::after { background: rgba(var(--ink), .28); }
   .gutter.cols { cursor: col-resize; }
   .gutter.rows { cursor: row-resize; }
-  .gutter.cols::after { left: 3px; right: 3px; top: 0; bottom: 0; }
-  .gutter.rows::after { top: 3px; bottom: 3px; left: 0; right: 0; }
+  .gutter.cols::after { left: 50%; width: 1px; top: 0; bottom: 0; }
+  .gutter.rows::after { top: 50%; height: 1px; left: 0; right: 0; }
 </style>
 </head>
 <body>
 
-<nav id="rail">
-  <div id="tabs"></div>
-  <button id="gear" title="Contas e tela (Ctrl+,)">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-      <circle cx="12" cy="12" r="3.2"/>
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.1 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09A1.7 1.7 0 0 0 21 10.1h.09a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1.03z"/>
-    </svg>
-  </button>
-</nav>
+<div id="bar"><span id="title">WappLink</span></div>
 
 <script>
-  let accounts = []
-  let badges = {}
+  const $title = document.getElementById('title')
 
-  const $tabs = document.getElementById('tabs')
-
-  const initials = (name) => {
-    const parts = String(name || '?').trim().split(/\s+/)
-    return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase()
+  function renderTitle (state) {
+    const acc = state.accounts.find(a => a.active)
+    $title.textContent = ''
+    if (!acc) { $title.textContent = 'WappLink'; return }
+    $title.append(acc.name)
+    const dim = document.createElement('span')
+    dim.className = 'dim'
+    dim.textContent = '  —  WappLink'
+    $title.append(dim)
   }
 
-  function renderTabs () {
-    $tabs.innerHTML = ''
-    accounts.forEach(acc => {
-      const n = badges[acc.id] || 0
-      const tab = document.createElement('div')
-      tab.className = 'tab' + (acc.active ? ' active' : '') + (acc.onScreen ? ' on' : '') + (acc.avatar ? ' photo' : '')
-      tab.title = acc.name + (acc.onScreen ? ' — na tela' : '') + '\nClique: focar  |  Ctrl+clique: pôr/tirar da tela'
-      if (acc.avatar) tab.style.backgroundImage = 'url(' + acc.avatar + ')'
-      if (acc.active || acc.onScreen) {
-        tab.style.backgroundColor = acc.color + '26'
-        tab.style.borderColor = acc.color + (acc.active ? '73' : '3d')
-      }
-      tab.innerHTML =
-        '<span class="bar" style="background:' + acc.color + '"></span>' +
-        '<span class="mono">' + initials(acc.name) + '</span>' +
-        '<span class="badge' + (n ? ' show' : '') + '">' + (n > 99 ? '99+' : n) + '</span>'
-      tab.onclick = (e) => { e.ctrlKey ? zap.togglePane(acc.id) : zap.select(acc.id) }
-      $tabs.appendChild(tab)
-    })
-  }
-
-  function renderFrames (frames) {
-    document.querySelectorAll('.frame').forEach(el => el.remove())
-    frames.forEach(f => {
-      const el = document.createElement('div')
-      el.className = 'frame'
-      el.style.left = f.x + 'px'
-      el.style.top = f.y + 'px'
-      el.style.width = f.width + 'px'
-      el.style.height = f.height + 'px'
-      // a conta focada fica com a cor cheia; as outras, apagadas
-      el.style.background = f.color + (f.active ? '' : '59')
-      document.body.appendChild(el)
-    })
+  function renderTheme (theme) {
+    if (!theme) return
+    document.documentElement.style.setProperty('--bg', theme.bg)
+    document.documentElement.classList.toggle('dark', !!theme.dark)
   }
 
   function renderGutters (gutters) {
@@ -211,11 +96,7 @@
     })
   }
 
-  document.getElementById('gear').onclick = () => zap.settings()
-
-  zap.onState((state) => { accounts = state.accounts; renderTabs() })
-  zap.onBadges((b) => { badges = b; renderTabs() })
-  zap.onFrames(renderFrames)
+  zap.onState((state) => { renderTheme(state.theme); renderTitle(state) })
   zap.onGutters(renderGutters)
 
   zap.ready()

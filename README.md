@@ -28,28 +28,36 @@ Sai um `.exe` (NSIS) em `dist/`. Instalação por usuário, sem admin.
 
 ## Como se organiza a tela
 
+Visual do WhatsApp nativo do Mac: nada de barra própria do lado. As contas
+ficam **dentro da coluna de ícones do WhatsApp**, no vão entre o Meta AI e a
+Mídia — conta 1 em cima, depois a 2, a 3… — com o mesmo botão redondo de 40px,
+a mesma bolinha verde de não lidas e, embaixo delas, o ícone de ajustes. A
+barra de título é fina e pega a cor da coluna do WhatsApp (claro ou escuro).
+Na tela do QR code, onde essa coluna não existe, as contas aparecem num cartão
+no canto de cima.
+
 | Ação | Resultado |
 | --- | --- |
-| Clique numa conta do rail | foca nela (no modo dividido, ela assume o painel em que você estava) |
+| Clique numa conta | foca nela (no modo dividido, ela assume o painel em que você estava) |
 | **Ctrl+clique** numa conta | põe ou tira essa conta da tela dividida |
 | Arrastar a divisória | muda a proporção entre os painéis |
 | `Ctrl+Alt+1/2/3` | uma conta / colunas (em pé) / linhas (deitado) |
 | `Ctrl+Alt+0` | divide tudo por igual |
 | `Ctrl+D` | põe ou tira a conta atual da divisão |
 
-No rail, a barrinha colorida à esquerda mostra o estado: **curta** = a conta
-está aparecendo em algum painel, **comprida** = é a conta focada (a que recebe
-o teclado).
+A conta focada fica com o fundo cinza redondo, como o ícone selecionado do
+WhatsApp; na tela dividida, as outras que estão aparecendo ganham um aro fino.
+O seletor aparece só no primeiro painel.
 
 ## Contas e ajustes
 
-A engrenagem no pé do rail (ou `Ctrl+,`) abre uma **janela flutuante** — ela não
+O ícone de ajustes embaixo das contas (ou `Ctrl+,`) abre uma **janela flutuante** — ela não
 empurra nem espreme o WhatsApp, e some sozinha quando perde o foco ou no `Esc`.
 Lá dentro dá pra:
 
 - **Foto:** clique no quadradinho da conta e escolha uma imagem. Ela é recortada
   no centro e reduzida pra 128px (`nativeImage`), sem virar dependência nova.
-- **Ordem:** arraste as linhas pelo `⠿` — a ordem do rail é a que você definir.
+- **Ordem:** arraste as linhas (o número à esquerda é a posição na coluna do WhatsApp).
 - **Nome e cor**, recarregar, desconectar (apaga a sessão e volta pro QR).
 - **Adicionar / remover conta** — até 8. Cada conta é um WhatsApp Web inteiro
   rodando, então o limite é RAM, não código.
@@ -58,7 +66,7 @@ Lá dentro dá pra:
 
 | Atalho | O que faz |
 | --- | --- |
-| `Ctrl+1` … `Ctrl+9` | foca a conta naquela posição do rail |
+| `Ctrl+1` … `Ctrl+9` | foca a conta naquela posição |
 | `Ctrl+Tab` | próxima conta |
 | `Ctrl+,` | abre/fecha a janela de contas e tela |
 | `Ctrl+R` | recarrega a conta focada |
@@ -78,7 +86,7 @@ Lá dentro dá pra:
 - **Contas fora da tela** continuam com `backgroundThrottling` desligado, senão
   o Chromium suspenderia os timers e as mensagens chegariam atrasadas.
 - **Divisórias:** as views do WhatsApp cobrem a janela inteira, então o mouse
-  nunca chega no nosso HTML — exceto na folga de 8px entre os painéis, que é
+  nunca chega no nosso HTML — exceto na folga de 6px entre os painéis, que é
   justamente onde ficam as alças. Enquanto você arrasta, o `main` sobe uma view
   transparente por cima de tudo (`drag.html`) só pra não perder o ponteiro
   quando ele passa por cima do WhatsApp.
@@ -118,7 +126,8 @@ Precisa de `gh auth login` (ou `GH_TOKEN`) na máquina que publica.
 
 ```
 src/main.js            processo principal: janelas, sessões, layout, menus, bandeja
-src/shell.html         o rail lateral + as alças das divisórias
+src/shell.html         barra de título + as alças das divisórias
+src/preload-wa.js      roda dentro do WhatsApp: notificação, painel estreito e as contas na coluna
 src/settings.html      janela flutuante de contas e tela
 src/drag.html          camada transparente usada durante o arrasto
 src/preload-*.js       pontes IPC de cada tela

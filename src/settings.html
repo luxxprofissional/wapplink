@@ -4,175 +4,212 @@
 <meta charset="utf-8">
 <title>WappLink - contas e tela</title>
 <style>
+  /* mesma familia visual do WhatsApp: fundo da coluna, tinta preta/branca em
+     transparencia, um acento so (o verde do WhatsApp) */
   :root {
-    --bg: #10161d;
-    --line: #1e2731;
-    --ink: #d7dee6;
-    --ink-dim: #6f7d8c;
+    --bg: rgb(247, 245, 243);
+    --panel: #fff;
+    --ink: 0, 0, 0;
+    --accent: #1daa61;
   }
+  :root.dark { --ink: 255, 255, 255; --panel: rgba(255, 255, 255, .04); }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
     background: var(--bg);
-    color: var(--ink);
-    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    color: rgba(var(--ink), .87);
+    font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-user-select: none;
     display: flex;
     flex-direction: column;
-    border: 1px solid #26313d;
+    border: 1px solid rgba(var(--ink), .12);
   }
+  button, input { font: inherit; color: inherit; }
 
   header {
     -webkit-app-region: drag;
     display: flex; align-items: center;
-    padding: 12px 14px 12px 16px;
-    border-bottom: 1px solid var(--line);
+    padding: 14px 12px 10px 18px;
   }
-  header .t {
-    font-size: 10.5px; font-weight: 600;
-    letter-spacing: 1.4px; text-transform: uppercase;
-    color: var(--ink-dim);
-  }
+  header .t { font-size: 15px; font-weight: 600; }
   header button {
     -webkit-app-region: no-drag;
     margin-left: auto;
-    width: 24px; height: 24px;
-    border: 0; border-radius: 6px;
-    background: transparent; color: var(--ink-dim);
-    font-size: 15px; line-height: 1; cursor: pointer;
+    width: 28px; height: 28px;
+    border: 0; border-radius: 50%;
+    background: transparent;
+    color: rgba(var(--ink), .6);
+    display: grid; place-items: center;
+    cursor: pointer;
   }
-  header button:hover { background: rgba(255,255,255,.07); color: var(--ink); }
+  header button:hover { background: rgba(var(--ink), .06); }
 
-  main { flex: 1; overflow-y: auto; padding: 16px; }
-  main::-webkit-scrollbar { width: 8px; }
-  main::-webkit-scrollbar-thumb { background: #202a35; border-radius: 4px; }
+  main { flex: 1; overflow-y: auto; padding: 4px 12px 12px; }
+  main::-webkit-scrollbar { width: 6px; }
+  main::-webkit-scrollbar-thumb { background: rgba(var(--ink), .15); border-radius: 3px; }
 
   h2 {
-    font-size: 10.5px; font-weight: 600;
-    letter-spacing: 1.4px; text-transform: uppercase;
-    color: var(--ink-dim);
-    margin: 0 0 10px;
+    font-size: 12px; font-weight: 500;
+    color: rgba(var(--ink), .55);
+    margin: 14px 6px 8px;
   }
-  section + section { margin-top: 22px; }
+
+  .card {
+    background: var(--panel);
+    border-radius: 12px;
+    border: 1px solid rgba(var(--ink), .06);
+  }
 
   /* ------------------------------------------------------ modos de tela */
-  .modes { display: flex; gap: 8px; }
+  .modes { display: flex; padding: 4px; gap: 4px; }
   .mode {
     flex: 1;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    border: 0; border-radius: 9px;
     background: transparent;
-    color: var(--ink-dim);
-    padding: 10px 4px 8px;
+    color: rgba(var(--ink), .6);
+    padding: 9px 4px 7px;
     cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; gap: 7px;
-    font: 11.5px "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 12px;
   }
-  .mode:hover { border-color: #2c3947; color: var(--ink); }
-  .mode.on { border-color: #3c5f86; background: #16202b; color: var(--ink); }
-  .mode svg rect { fill: currentColor; opacity: .55; }
-  .mode.on svg rect { opacity: .9; }
-  .hint { color: var(--ink-dim); font-size: 11.5px; margin-top: 9px; line-height: 1.7; }
+  .mode:hover { background: rgba(var(--ink), .04); }
+  .mode.on { background: rgba(var(--ink), .08); color: rgba(var(--ink), .9); }
+  .mode svg rect { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  .mode.on svg rect { fill: currentColor; fill-opacity: .12; }
+  .hint { color: rgba(var(--ink), .5); font-size: 12px; margin: 8px 6px 0; line-height: 1.55; }
 
   /* ------------------------------------------------------ contas */
-  .acc {
-    border: 1px solid transparent;
-    border-radius: 9px;
-    padding: 7px 8px;
-    margin: 0 -8px;
-  }
-  .acc.drop-before { box-shadow: 0 -2px 0 -1px #3c5f86; }
-  .acc.drop-after { box-shadow: 0 2px 0 -1px #3c5f86; }
+  .acc { border-radius: 10px; }
+  .acc + .acc { border-top: 1px solid rgba(var(--ink), .06); }
+  .acc.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .acc.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
   .acc.dragging { opacity: .4; }
-  .acc.open { border-color: var(--line); background: #131b23; }
 
-  .row { display: flex; align-items: center; gap: 10px; }
-  .grip {
-    color: #3a4753; cursor: grab;
-    font-size: 13px; line-height: 1; letter-spacing: -1px;
-    padding: 2px 1px;
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 6px; }
+  .num {
+    width: 14px; flex: 0 0 14px;
+    text-align: center;
+    font-size: 11px; font-variant-numeric: tabular-nums;
+    color: rgba(var(--ink), .35);
+    cursor: grab;
   }
   .pic {
-    width: 38px; height: 38px; flex: 0 0 38px;
-    border-radius: 11px;
-    background: rgba(255,255,255,.05) center/cover no-repeat;
-    border: 1px solid var(--line);
+    width: 32px; height: 32px; flex: 0 0 32px;
+    border-radius: 50%;
+    background: center/cover no-repeat;
     display: grid; place-items: center;
-    font-size: 12px; font-weight: 600; letter-spacing: .5px;
-    color: var(--ink-dim);
+    font-size: 11.5px; font-weight: 600; letter-spacing: .3px;
+    color: #fff;
     cursor: pointer;
-    position: relative;
   }
-  .pic:hover { border-color: #33414f; }
   .pic.has span { display: none; }
+  .pic:hover { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px rgba(var(--ink), .25); }
   .name {
     flex: 1; min-width: 0;
     background: transparent; border: 0;
-    border-bottom: 1px solid transparent;
-    color: var(--ink);
-    font: 500 13.5px "Segoe UI", system-ui, sans-serif;
-    padding: 3px 0 4px;
+    border-radius: 6px;
+    font-size: 13.5px; font-weight: 500;
+    padding: 4px 6px; margin-left: -6px;
     outline: none;
     -webkit-user-select: text;
   }
-  .name:hover { border-bottom-color: var(--line); }
-  .name:focus { border-bottom-color: var(--ink-dim); }
+  .name:hover { background: rgba(var(--ink), .04); }
+  .name:focus { background: rgba(var(--ink), .06); }
 
   .icon {
-    width: 26px; height: 26px; flex: 0 0 26px;
-    border: 1px solid var(--line); border-radius: 7px;
-    background: transparent; color: var(--ink-dim);
+    width: 30px; height: 30px; flex: 0 0 30px;
+    border: 0; border-radius: 50%;
+    background: transparent;
+    color: rgba(var(--ink), .45);
     display: grid; place-items: center; cursor: pointer;
   }
-  .icon:hover { color: var(--ink); border-color: #33414f; }
-  .icon.on { color: #7fd8a2; border-color: #2f5b43; background: #14241b; }
-  .chev { border: 0; background: transparent; color: #495764; cursor: pointer; padding: 4px; }
-  .chev:hover { color: var(--ink); }
+  .icon:hover { background: rgba(var(--ink), .06); color: rgba(var(--ink), .8); }
+  .icon.on { color: var(--accent); }
 
-  .more { display: none; padding: 11px 0 3px 48px; }
+  .more { display: none; padding: 0 12px 12px 58px; }
   .acc.open .more { display: block; }
-  .swatches { display: flex; gap: 7px; margin-bottom: 11px; }
+  .swatches { display: flex; gap: 8px; margin: 2px 0 12px; }
   .sw {
-    width: 15px; height: 15px; border-radius: 4px;
-    border: 1px solid rgba(255,255,255,.14);
-    cursor: pointer; opacity: .5;
-  }
-  .sw:hover { opacity: .85; }
-  .sw.on { opacity: 1; box-shadow: 0 0 0 2px #131b23, 0 0 0 3px currentColor; }
-  .acts { display: flex; flex-wrap: wrap; gap: 14px; }
-  .acts button {
-    background: none; border: 0; padding: 0;
-    color: var(--ink-dim);
-    font: 12px "Segoe UI", system-ui, sans-serif;
+    width: 16px; height: 16px; border-radius: 50%;
     cursor: pointer;
   }
-  .acts button:hover { color: var(--ink); }
-  .acts button.danger:hover { color: #d97a7a; }
+  .sw.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px currentColor; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .acts button {
+    border: 1px solid rgba(var(--ink), .12);
+    background: transparent;
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: rgba(var(--ink), .75);
+    cursor: pointer;
+  }
+  .acts button:hover { background: rgba(var(--ink), .05); }
+  .acts button.danger { color: #d1485a; }
 
   #add {
+    display: flex; align-items: center; gap: 10px;
     width: 100%;
-    margin-top: 12px;
-    border: 1px dashed #26313d; border-radius: 8px;
-    background: transparent; color: var(--ink-dim);
-    padding: 9px; cursor: pointer;
-    font: 12.5px "Segoe UI", system-ui, sans-serif;
+    border: 0; border-top: 1px solid rgba(var(--ink), .06);
+    border-radius: 0 0 12px 12px;
+    background: transparent;
+    color: var(--accent);
+    padding: 10px 8px 10px 30px;
+    cursor: pointer;
+    font-size: 13px; font-weight: 500;
+    text-align: left;
   }
-  #add:hover:not(:disabled) { border-color: #3c5f86; color: var(--ink); }
-  #add:disabled { opacity: .45; cursor: default; }
+  #add:hover:not(:disabled) { background: rgba(var(--ink), .03); }
+  #add:disabled { color: rgba(var(--ink), .4); cursor: default; }
+  #add .plus {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(29, 170, 97, .12);
+  }
+  #add:disabled .plus { background: rgba(var(--ink), .06); }
+
+  /* ------------------------------------------------------ opcoes */
+  .opt {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .opt + .opt { border-top: 1px solid rgba(var(--ink), .06); }
+  .opt span { flex: 1; }
+  /* chave no lugar do checkbox */
+  .opt input {
+    appearance: none;
+    width: 34px; height: 20px; flex: 0 0 34px;
+    border-radius: 10px;
+    background: rgba(var(--ink), .18);
+    position: relative;
+    cursor: pointer;
+    transition: background-color .15s ease;
+  }
+  .opt input::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .15s ease;
+  }
+  .opt input:checked { background: var(--accent); }
+  .opt input:checked::after { transform: translateX(14px); }
 
   footer {
-    border-top: 1px solid var(--line);
-    padding: 12px 16px 14px;
-    color: var(--ink-dim);
+    padding: 10px 18px 14px;
+    color: rgba(var(--ink), .45);
     font-size: 11.5px;
     line-height: 1.9;
   }
-  footer label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-bottom: 6px; }
   footer kbd {
-    font: 11px ui-monospace, Consolas, monospace;
-    color: var(--ink);
-    background: rgba(255,255,255,.06);
-    border: 1px solid var(--line);
+    font: 11px "Segoe UI", -apple-system, system-ui, sans-serif;
+    color: rgba(var(--ink), .7);
+    background: rgba(var(--ink), .06);
     border-radius: 4px;
     padding: 1px 5px;
   }
@@ -182,41 +219,43 @@
 
 <header>
   <span class="t">Contas e tela</span>
-  <button id="x" title="Fechar (Esc)">&times;</button>
+  <button id="x" title="Fechar (Esc)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
 </header>
 
 <main>
-  <section>
-    <h2>Tela</h2>
-    <div class="modes">
-      <button class="mode" data-mode="focus">
-        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="32" height="20" rx="2"/></svg>
-        Uma conta
-      </button>
-      <button class="mode" data-mode="cols">
-        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="15" height="20" rx="2"/><rect x="18" y="1" width="15" height="20" rx="2"/></svg>
-        Colunas
-      </button>
-      <button class="mode" data-mode="rows">
-        <svg width="34" height="22" viewBox="0 0 34 22"><rect x="1" y="1" width="32" height="9" rx="2"/><rect x="1" y="12" width="32" height="9" rx="2"/></svg>
-        Linhas
-      </button>
-    </div>
-    <div class="hint" id="modehint"></div>
-  </section>
+  <div class="card modes">
+    <button class="mode" data-mode="focus">
+      <svg width="30" height="20" viewBox="0 0 30 20"><rect x="1" y="1" width="28" height="18" rx="3"/></svg>
+      Uma conta
+    </button>
+    <button class="mode" data-mode="cols">
+      <svg width="30" height="20" viewBox="0 0 30 20"><rect x="1" y="1" width="13" height="18" rx="3"/><rect x="16" y="1" width="13" height="18" rx="3"/></svg>
+      Colunas
+    </button>
+    <button class="mode" data-mode="rows">
+      <svg width="30" height="20" viewBox="0 0 30 20"><rect x="1" y="1" width="28" height="8" rx="3"/><rect x="1" y="11" width="28" height="8" rx="3"/></svg>
+      Linhas
+    </button>
+  </div>
+  <div class="hint" id="modehint"></div>
 
-  <section>
-    <h2>Contas</h2>
+  <h2>Contas</h2>
+  <div class="card">
     <div id="list"></div>
-    <button id="add">+ Adicionar conta</button>
-  </section>
+    <button id="add"><span class="plus"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span id="addlabel">Adicionar conta</span></button>
+  </div>
+
+  <h2>Opções</h2>
+  <div class="card">
+    <label class="opt"><span>Painel estreito mostra só a lista</span><input type="checkbox" id="listonly"></label>
+    <label class="opt"><span>Fechar minimiza para a bandeja</span><input type="checkbox" id="tray"></label>
+  </div>
 </main>
 
 <footer>
-  <label><input type="checkbox" id="listonly"> Painel estreito mostra só a lista</label>
-  <label><input type="checkbox" id="tray"> Fechar minimiza para a bandeja</label>
-  <div><kbd>Ctrl</kbd>+<kbd>1</kbd>..<kbd>9</kbd> foca conta &middot; <kbd>Ctrl</kbd>+<kbd>D</kbd> divide</div>
-  <div><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> foco, colunas, linhas</div>
+  <div><kbd class="mod">Ctrl</kbd> <kbd>1</kbd>…<kbd>9</kbd> troca de conta · <kbd class="mod">Ctrl</kbd> <kbd>D</kbd> divide a tela</div>
 </footer>
 
 <script>
@@ -233,9 +272,9 @@
   }
 
   const HINTS = {
-    focus: 'Uma conta por vez. Clicar no rail troca de conta.',
-    cols: 'Contas lado a lado. Ctrl+clique no rail põe ou tira da tela; arraste a divisória pra mudar a proporção.',
-    rows: 'Contas empilhadas. Ctrl+clique no rail põe ou tira da tela; arraste a divisória pra mudar a proporção.'
+    focus: 'Uma conta por vez. As contas ficam na coluna de ícones do WhatsApp, embaixo do Meta AI.',
+    cols: 'Contas lado a lado. Ctrl+clique numa conta põe ou tira da tela; arraste a divisória pra mudar a proporção.',
+    rows: 'Contas empilhadas. Ctrl+clique numa conta põe ou tira da tela; arraste a divisória pra mudar a proporção.'
   }
 
   function renderModes () {
@@ -243,7 +282,9 @@
       btn.classList.toggle('on', btn.dataset.mode === state.layout.mode)
       btn.onclick = () => zap.mode(btn.dataset.mode)
     })
-    $hint.textContent = HINTS[state.layout.mode] || ''
+    let hint = HINTS[state.layout.mode] || ''
+    if (state.platform === 'darwin') hint = hint.replace('Ctrl+', '⌘+')
+    $hint.textContent = hint
   }
 
   function renderList () {
@@ -259,17 +300,18 @@
       const row = document.createElement('div')
       row.className = 'row'
 
-      const grip = document.createElement('span')
-      grip.className = 'grip'
-      grip.textContent = '⠿'
-      grip.title = 'Arraste pra reordenar'
-      row.appendChild(grip)
+      // a posicao na coluna do WhatsApp; arrastar a linha reordena
+      const num = document.createElement('span')
+      num.className = 'num'
+      num.textContent = index + 1
+      num.title = 'Arraste pra reordenar'
+      row.appendChild(num)
 
       const pic = document.createElement('div')
       pic.className = 'pic' + (acc.avatar ? ' has' : '')
       pic.title = acc.avatar ? 'Trocar a foto' : 'Escolher uma foto'
       if (acc.avatar) pic.style.backgroundImage = 'url(' + acc.avatar + ')'
-      pic.style.borderColor = acc.color + '59'
+      else pic.style.backgroundColor = acc.color
       pic.innerHTML = '<span>' + initials(acc.name) + '</span>'
       pic.onclick = () => zap.avatar(acc.id)
       row.appendChild(pic)
@@ -290,15 +332,15 @@
       const onScreen = document.createElement('button')
       onScreen.className = 'icon' + (acc.onScreen ? ' on' : '')
       onScreen.title = acc.onScreen ? 'Está na tela — clique pra tirar' : 'Pôr na tela'
-      onScreen.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
-        '<rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20h8"/></svg>'
+      onScreen.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">' +
+        '<rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8.5 20.5h7" stroke-linecap="round"/></svg>'
       onScreen.onclick = () => zap.togglePane(acc.id)
       row.appendChild(onScreen)
 
       const chev = document.createElement('button')
-      chev.className = 'chev'
+      chev.className = 'icon'
       chev.title = 'Mais opções'
-      chev.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">' +
+      chev.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
         '<path d="M6 9l6 6 6-6"/></svg>'
       chev.style.transform = openId === acc.id ? 'rotate(180deg)' : ''
       chev.onclick = () => { openId = openId === acc.id ? null : acc.id; renderList() }
@@ -372,9 +414,9 @@
 
     const add = document.getElementById('add')
     add.disabled = state.accounts.length >= state.maxAccounts
-    add.textContent = add.disabled
+    document.getElementById('addlabel').textContent = add.disabled
       ? 'Limite de ' + state.maxAccounts + ' contas'
-      : '+ Adicionar conta'
+      : 'Adicionar conta'
   }
 
   document.getElementById('add').onclick = () => zap.add()
@@ -386,6 +428,11 @@
   zap.onState((s) => {
     state = s
     if (openId && !s.accounts.some(a => a.id === openId)) openId = null
+    if (s.theme) {
+      document.documentElement.style.setProperty('--bg', s.theme.bg)
+      document.documentElement.classList.toggle('dark', !!s.theme.dark)
+    }
+    if (s.platform === 'darwin') document.querySelectorAll('kbd.mod').forEach(k => { k.textContent = '⌘' })
     document.getElementById('tray').checked = !!s.closeToTray
     document.getElementById('listonly').checked = !!s.listOnly
     renderModes()

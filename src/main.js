@@ -10,9 +10,8 @@ const updater = require('./updater')
 
 const APP_ID = 'com.luxx.zapbox'
 const WA_URL = 'https://web.whatsapp.com/'
-const RAIL = 72        // largura da coluna de contas
-const GUTTER = 8       // espessura da divisoria entre paineis
-const FRAME = 3        // moldura colorida em volta de cada painel dividido
+const TOP = 32         // barra de titulo nossa (as contas ficam na coluna do proprio WhatsApp)
+const GUTTER = 6       // espessura da divisoria entre paineis
 const NARROW = 760     // abaixo disso o painel esconde a area de conversa vazia
 const MIN_PANE = 260   // menor largura/altura util de um painel
 const MAX_ACCOUNTS = 8 // teto por causa de RAM: cada conta e um WhatsApp Web inteiro
@@ -116,6 +115,10 @@ let dragLayer = null
 let dragIndex = -1
 let dialogOpen = false
 let quitting = false
+
+// cor da coluna de icones do WhatsApp da conta ativa; a barra de titulo, as
+// divisorias e a janela de ajustes pintam igual
+let theme = { bg: 'rgb(247,245,243)', dark: false }
 
 const views = new Map()    // id -> WebContentsView
 const badges = new Map()   // id -> numero de nao lidas
@@ -237,8 +240,9 @@ function buildView (acc) {
     }
   })
 
-  // recarregar a pagina apaga o estilo injetado; reavisa a largura
+  // recarregar a pagina apaga o estilo injetado e o seletor de contas; reavisa
   wc.on('did-finish-load', () => wc.send('zapbox:narrow', isNarrow(view.getBounds().width)))
+  wc.on('dom-ready', () => pushSwitcher())
 
   wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
     if (isMainFrame && code !== -3) setTimeout(() => wc.loadURL(WA_URL), 4000)
@@ -275,7 +279,7 @@ function isNarrow (width) {
 
 function computeLayout () {
   const { width, height } = win.getContentBounds()
-  const area = { x: RAIL, y: 0, width: Math.max(0, width - RAIL), height }
+  const area = { x: 0, y: TOP, width, height: Math.max(0, height - TOP) }
   const panes = cfg.layout.panes
   const n = panes.length
   const rects = []
@@ -320,27 +324,63 @@ function applyLayout () {
 
   for (const [id, view] of views) showView(view, onScreen.has(id))
 
-  // com mais de um painel, a view recua 3px pra sobrar a moldura da cor da
-  // conta - o que aparece na folga e o fundo da pagina do rail, embaixo
-  const inset = rects.length > 1 ? FRAME : 0
-  const frames = []
   for (const r of rects) {
     const view = views.get(r.id)
     if (!view) continue
-    const width = r.width - inset * 2
-    view.setBounds({ x: r.x + inset, y: r.y + inset, width, height: r.height - inset * 2 })
-    view.webContents.send('zapbox:narrow', isNarrow(width))
-    if (inset) {
-      const acc = account(r.id)
-      frames.push({ ...r, color: acc ? acc.color : '#5b8def', active: r.id === cfg.activeId })
+    view.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
+    view.webContents.send('zapbox:narrow', isNarrow(r.width))
+  }
+  if (dragLayer) dragLayer.setBounds(dragBounds())
+  win.webContents.send('gutters', gutters)
+  pushSwitcher()
+}
+
+const dragBounds = () => {
+  const { width, height } = win.getContentBounds()
+  return { x: 0, y: TOP, width, height: Math.max(0, height - TOP) }
+}
+
+// o seletor de contas aparece so no primeiro painel (em foco, o unico); nos
+// outros a coluna do WhatsApp fica como veio
+function pushSwitcher () {
+  if (!win || win.isDestroyed()) return
+  const host = cfg.layout.panes[0]
+  const state = {
+    accounts: cfg.accounts.map(a => ({
+      id: a.id,
+      name: a.name,
+      color: a.color,
+      avatar: avatars.get(a.id) || null,
+      badge: badges.get(a.id) || 0,
+      onScreen: cfg.layout.panes.includes(a.id),
+      active: a.id === cfg.activeId
+    })),
+    split: cfg.layout.mode !== 'focus',
+    mod: IS_MAC ? '⌘' : 'Ctrl'
+  }
+  for (const [id, view] of views) {
+    if (view.webContents.isDestroyed()) continue
+    // reportTheme: a conta focada reenvia a cor (ela pode ter acabado de virar a focada)
+    view.webContents.send('wapp:switcher', { ...state, show: id === host, reportTheme: id === cfg.activeId })
+  }
+}
+
+function applyTheme (next) {
+  if (!next || typeof next.bg !== 'string' || !/^rgb\(\d+,\d+,\d+\)$/.test(next.bg)) return
+  if (next.bg === theme.bg && !!next.dark === theme.dark) return
+  theme = { bg: next.bg, dark: !!next.dark }
+  if (win && !win.isDestroyed()) {
+    win.setBackgroundColor(rgbToHex(theme.bg))
+    if (process.platform === 'win32') {
+      win.setTitleBarOverlay({ color: rgbToHex(theme.bg), symbolColor: theme.dark ? '#e9edef' : '#3b4a54' })
     }
   }
-  win.webContents.send('frames', frames)
-  if (dragLayer) {
-    const { width, height } = win.getContentBounds()
-    dragLayer.setBounds({ x: RAIL, y: 0, width: Math.max(0, width - RAIL), height })
-  }
-  win.webContents.send('gutters', gutters)
+  pushState()
+}
+
+function rgbToHex (rgb) {
+  const [r, g, b] = rgb.match(/\d+/g).map(Number)
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
 }
 
 function resizePanes (px, py) {
@@ -348,13 +388,13 @@ function resizePanes (px, py) {
   if (dragIndex < 0 || dragIndex >= n - 1) return
   const { width, height } = win.getContentBounds()
   const horizontal = cfg.layout.mode === 'cols'
-  const span = (horizontal ? width - RAIL : height) - GUTTER * (n - 1)
+  const span = (horizontal ? width : height - TOP) - GUTTER * (n - 1)
   if (span <= 0) return
 
   const sizes = cfg.layout.sizes.slice()
   let before = 0
   for (let i = 0; i < dragIndex; i++) before += sizes[i]
-  const origin = (horizontal ? RAIL : 0) + before * span + dragIndex * GUTTER
+  const origin = (horizontal ? 0 : TOP) + before * span + dragIndex * GUTTER
 
   const pair = sizes[dragIndex] + sizes[dragIndex + 1]
   const min = Math.min(MIN_PANE / span, pair / 2)
@@ -444,7 +484,9 @@ function stateFor () {
     palette: PALETTE,
     maxAccounts: MAX_ACCOUNTS,
     closeToTray: cfg.closeToTray,
-    listOnly: cfg.listOnly
+    listOnly: cfg.listOnly,
+    theme,
+    platform: process.platform
   }
 }
 
@@ -452,19 +494,15 @@ function pushState () {
   const state = stateFor()
   if (win && !win.isDestroyed()) win.webContents.send('state', state)
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('state', state)
+  pushSwitcher()
   buildAppMenu()
   buildTrayMenu()
 }
 
 function pushBadges () {
-  const map = {}
   let total = 0
-  for (const acc of cfg.accounts) {
-    const n = badges.get(acc.id) || 0
-    map[acc.id] = n
-    total += n
-  }
-  if (win && !win.isDestroyed()) win.webContents.send('badges', map)
+  for (const acc of cfg.accounts) total += badges.get(acc.id) || 0
+  pushSwitcher()
   if (tray) tray.setToolTip(total ? `WappLink — ${total} não lidas` : 'WappLink')
   try { app.badgeCount = total } catch { /* Windows nao tem badge de dock */ }
   buildTrayMenu()
@@ -536,12 +574,21 @@ function reorderAccounts (id, toIndex) {
 // ---------------------------------------------------------------- ipc
 
 ipcMain.on('shell:ready', () => { pushState(); pushBadges(); applyLayout() })
-ipcMain.on('shell:select', (_e, id) => selectAccount(id))
-ipcMain.on('shell:toggle-pane', (_e, id) => togglePane(id))
-ipcMain.on('shell:settings', () => toggleSettings())
+
+// seletor de contas dentro do WhatsApp
+ipcMain.on('wa:select', (_e, id) => selectAccount(id))
+ipcMain.on('wa:toggle', (_e, id) => togglePane(id))
+ipcMain.on('wa:settings', () => toggleSettings())
+
+// so a conta focada decide a cor: com contas em temas diferentes, a barra
+// acompanha a que esta sendo usada
+ipcMain.on('wa:theme', (event, next) => {
+  const view = views.get(cfg.activeId)
+  if (view && view.webContents === event.sender) applyTheme(next)
+})
 
 ipcMain.on('gutter:down', (_e, index) => startGutterDrag(index))
-ipcMain.on('gutter:move', (_e, pos) => resizePanes(RAIL + pos.x, pos.y))
+ipcMain.on('gutter:move', (_e, pos) => resizePanes(pos.x, TOP + pos.y))
 ipcMain.on('gutter:up', () => endGutterDrag())
 
 ipcMain.on('settings:ready', () => pushState())
@@ -629,7 +676,6 @@ ipcMain.on('wa:notification-click', (event) => {
 function startGutterDrag (index) {
   if (dragLayer || index < 0 || index >= cfg.layout.panes.length - 1) return
   dragIndex = index
-  const { width, height } = win.getContentBounds()
   dragLayer = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, 'preload-drag.js'),
@@ -639,7 +685,7 @@ function startGutterDrag (index) {
     }
   })
   dragLayer.setBackgroundColor('#00000000')
-  dragLayer.setBounds({ x: RAIL, y: 0, width: Math.max(0, width - RAIL), height })
+  dragLayer.setBounds(dragBounds())
   win.contentView.addChildView(dragLayer)
   dragLayer.webContents.loadFile(path.join(__dirname, 'drag.html'), {
     query: { dir: cfg.layout.mode }
@@ -796,7 +842,8 @@ function placeSettings () {
   const width = 380
   const height = Math.min(660, Math.max(420, b.height - 80))
   const area = screen.getDisplayMatching(b).workArea
-  let x = b.x + RAIL + 12
+  // encostada na coluna do WhatsApp, onde fica o botao que abre
+  let x = b.x + 64 + 12
   let y = b.y + Math.max(40, b.height - height - 56)
   x = Math.max(area.x, Math.min(x, area.x + area.width - width))
   y = Math.max(area.y, Math.min(y, area.y + area.height - height))
@@ -815,7 +862,7 @@ function createSettings () {
     fullscreenable: false,
     skipTaskbar: true,
     show: false,
-    backgroundColor: '#10161d',
+    backgroundColor: rgbToHex(theme.bg),
     webPreferences: {
       preload: path.join(__dirname, 'preload-settings.js'),
       contextIsolation: true,
@@ -858,9 +905,15 @@ function createWindow () {
     minHeight: 620,
     title: 'WappLink',
     icon: iconPath,
-    backgroundColor: '#0d1116',
+    backgroundColor: rgbToHex(theme.bg),
     autoHideMenuBar: true,
     show: false,
+    // barra de titulo nossa, fina e na cor do WhatsApp, como o app nativo do Mac:
+    // no Mac os tres botoes ficam embutidos; no Windows os controles vem por overlay
+    titleBarStyle: 'hidden',
+    ...(IS_MAC
+      ? { trafficLightPosition: { x: 12, y: 10 } }
+      : { titleBarOverlay: { color: rgbToHex(theme.bg), symbolColor: '#3b4a54', height: TOP } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload-shell.js'),
       contextIsolation: true,
