@@ -43,7 +43,20 @@ async function api (method, url, body) {
   return res.json()
 }
 
-function build () {
+// cria o rascunho antes do electron-builder: sem isso ele sobe os arquivos em
+// paralelo e cada upload cria o seu proprio rascunho vX.Y.Z (ja aconteceu)
+async function ensureDraft () {
+  const releases = await api('GET', '/releases?per_page=20')
+  const rel = releases.find(r => r.tag_name === tag)
+  if (rel && !rel.draft) {
+    console.error(`${tag} já foi publicado. Suba a "version" no package.json antes.`)
+    process.exit(1)
+  }
+  if (!rel) await api('POST', '/releases', { tag_name: tag, name: version, draft: true })
+}
+
+async function build () {
+  await ensureDraft()
   const platform = { win32: '--win', darwin: '--mac' }[process.platform]
   if (!platform) {
     console.error(`Build só no Windows ou no Mac (aqui é ${process.platform}).`)
@@ -52,7 +65,10 @@ function build () {
   const env = { ...process.env, GH_TOKEN: token() }
   // os icones ficam versionados em build/; so regenere (npm run icon) se o logo mudar
   const cli = path.join(root, 'node_modules', 'electron-builder', 'cli.js')
-  const r = spawnSync(process.execPath, [cli, platform, '--publish', 'always'], { cwd: root, env, stdio: 'inherit' })
+  // pasta propria: dist/ pode estar em uso por um app aberto de dist/win-unpacked
+  const r = spawnSync(process.execPath,
+    [cli, platform, '--publish', 'always', '-c.directories.output=release'],
+    { cwd: root, env, stdio: 'inherit' })
   if (r.status !== 0) process.exit(r.status || 1)
   console.log(`\nOK: ${tag} (${platform.slice(2)}) enviado ao rascunho.`)
   console.log('Quando Windows e Mac estiverem lá: npm run release:publish')
@@ -79,5 +95,5 @@ async function publish () {
 if (process.argv.includes('--publish')) {
   publish().catch(err => { console.error(err.message); process.exit(1) })
 } else {
-  build()
+  build().catch(err => { console.error(err.message); process.exit(1) })
 }
