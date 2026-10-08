@@ -81,13 +81,37 @@ document.addEventListener('zapbox:notification-click', () => {
   ipcRenderer.send('wa:notification-click')
 })
 
-// o WhatsApp e uma SPA: se ele reescrever o head, o estilo volta
+// o WhatsApp e uma SPA: se ele reescrever o head, o estilo volta.
+// Conta pausada fica em about:blank, e la nada disso tem o que fazer.
 document.addEventListener('DOMContentLoaded', () => {
+  if (location.hostname !== 'web.whatsapp.com') return
   apply()
   new MutationObserver(apply).observe(document.head, { childList: true })
   mountSwitcher()
   mountTranscriber()
+  watchLogin()
 })
+
+// ---------------------------------------------------------------- logado ou no QR
+
+// O main pausa conta que fica parada na tela do QR fora da vista: a pagina
+// de login do WhatsApp renova o QR sem parar e vaza ~90 listeners por minuto.
+// Marcas estaveis: a lista de conversas e #side; o QR e data-testid proprio
+// (ou a div data-ref que carrega o conteudo dele).
+function watchLogin () {
+  let last = ''
+  const check = () => {
+    const state = document.getElementById('side') ? 'in'
+      : document.querySelector('[data-testid="link-device-qr-code"], [data-ref] canvas') ? 'qr'
+        : 'loading'
+    if (state !== last) {
+      last = state
+      ipcRenderer.send('wa:login-state', state)
+    }
+  }
+  check()
+  setInterval(check, 5000)
+}
 
 // ---------------------------------------------------------------- contas na coluna
 
@@ -231,22 +255,39 @@ function mountSwitcher () {
   document.documentElement.appendChild(host)
   sw = { host, box }
 
-  // a coluna muda de tamanho com a janela e o WhatsApp remonta tudo quando
-  // loga/desloga — reposiciona por observacao, com uma rede de seguranca
-  // o WhatsApp muta o DOM sem parar (e as 3+ contas rodam em segundo plano):
-  // no maximo uma medicao a cada 150ms
-  let pending = false
-  const schedule = () => {
-    if (pending) return
-    pending = true
-    setTimeout(() => { pending = false; place() }, 150)
-  }
-  addEventListener('resize', schedule)
-  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true })
-  setInterval(schedule, 1500)
-
+  addEventListener('resize', swSchedule)
   render()
-  schedule()
+  swSchedule()
+}
+
+// a coluna muda de tamanho com a janela e o WhatsApp remonta tudo quando
+// loga/desloga — reposiciona por observacao, com uma rede de seguranca.
+// O WhatsApp muta o DOM sem parar: no maximo uma medicao a cada 150ms, e so
+// na conta que mostra o seletor ou que manda a cor da barra (a focada). As
+// outras ficam sem observador nenhum.
+let swPending = false
+let swObserver = null
+let swTimer = null
+
+function swSchedule () {
+  if (swPending) return
+  swPending = true
+  setTimeout(() => { swPending = false; place() }, 150)
+}
+
+function setWatching (on) {
+  if (!sw) return
+  if (on && !swObserver) {
+    swObserver = new MutationObserver(swSchedule)
+    swObserver.observe(document.body, { childList: true, subtree: true })
+    swTimer = setInterval(swSchedule, 1500)
+    swSchedule()
+  } else if (!on && swObserver) {
+    swObserver.disconnect()
+    swObserver = null
+    clearInterval(swTimer)
+    swTimer = null
+  }
 }
 
 function place () {
@@ -350,6 +391,8 @@ ipcRenderer.on('wapp:switcher', (_e, state) => {
   swState = state
   if (state.reportTheme) lastTheme = '' // forca reenviar a cor no proximo place()
   render()
+  setWatching(!!(state.show || state.reportTheme))
+  setTranscribing(!!state.visible)
 })
 
 // ---------------------------------------------------------------- transcricao
@@ -464,22 +507,36 @@ button:focus-visible { opacity: 1; text-decoration: underline; }
 `
 
 let trAvailable = false
+let trWanted = false             // a conta esta na tela (o main avisa pelo seletor)
+let trObserver = null
+let trPending = false
 const trState = new Map()        // id -> { phase: idle|busy|done|error, text, status }
 const trRoots = new WeakMap()    // host -> shadow root
 
 function mountTranscriber () {
   ipcRenderer.invoke('wa:transcribe-available').then((ok) => {
     trAvailable = !!ok
-    if (!trAvailable) return
-    let pending = false
-    const schedule = () => {
-      if (pending) return
-      pending = true
-      setTimeout(() => { pending = false; scanAudios() }, 250)
-    }
-    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true })
-    schedule()
+    setTranscribing(trWanted)
   }).catch(() => { /* main sem o handler: segue sem transcricao */ })
+}
+
+function trSchedule () {
+  if (trPending) return
+  trPending = true
+  setTimeout(() => { trPending = false; scanAudios() }, 250)
+}
+
+// conta fora da tela nao procura bolha de audio: ninguem esta vendo
+function setTranscribing (on) {
+  trWanted = on
+  if (on && trAvailable && !trObserver && document.body) {
+    trObserver = new MutationObserver(trSchedule)
+    trObserver.observe(document.body, { childList: true, subtree: true })
+    trSchedule()
+  } else if (!on && trObserver) {
+    trObserver.disconnect()
+    trObserver = null
+  }
 }
 
 function commonAncestor (a, b) {

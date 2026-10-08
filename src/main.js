@@ -126,6 +126,8 @@ let theme = { bg: 'rgb(247,245,243)', dark: false }
 const views = new Map()    // id -> WebContentsView
 const badges = new Map()   // id -> numero de nao lidas
 const avatars = new Map()  // id -> data URL da foto
+const loginState = new Map() // id -> { state: 'in'|'qr'|'loading', since }
+const suspended = new Set()  // contas pausadas (sem login e fora da tela)
 
 // macOS nao le .ico
 const iconPath = path.join(__dirname, '..', 'build', IS_MAC ? 'icon.png' : 'icon.ico')
@@ -245,12 +247,21 @@ function buildView (acc) {
 
   // recarregar a pagina apaga o estilo injetado e o seletor de contas; reavisa
   wc.on('did-finish-load', () => wc.send('zapbox:narrow', isNarrow(view.getBounds().width)))
-  wc.on('dom-ready', () => pushSwitcher())
+  // pagina nova nao tem o seletor: esquece o que ja tinha sido enviado
+  wc.on('dom-ready', () => { lastSwitcher.delete(acc.id); pushSwitcher() })
+
+  // carregou o WhatsApp de novo (mostrou a conta, recarregou...): nao esta
+  // mais pausada
+  wc.on('did-navigate', (_e, url) => {
+    if (url.startsWith(WA_URL)) suspended.delete(acc.id)
+  })
 
   wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) setTimeout(() => wc.loadURL(WA_URL), 4000)
+    if (isMainFrame && code !== -3 && !suspended.has(acc.id)) setTimeout(() => wc.loadURL(WA_URL), 4000)
   })
-  wc.on('render-process-gone', () => setTimeout(() => wc.loadURL(WA_URL), 1500))
+  wc.on('render-process-gone', () => {
+    if (!suspended.has(acc.id)) setTimeout(() => wc.loadURL(WA_URL), 1500)
+  })
 
   views.set(acc.id, view)
   win.contentView.addChildView(view)
@@ -264,6 +275,9 @@ function destroyView (id) {
   try { view.webContents.close() } catch { /* ja fechada */ }
   views.delete(id)
   badges.delete(id)
+  lastSwitcher.delete(id)
+  loginState.delete(id)
+  suspended.delete(id)
 }
 
 function showView (view, visible) {
@@ -325,7 +339,14 @@ function applyLayout () {
   const { rects, gutters } = computeLayout()
   const onScreen = new Set(rects.map(r => r.id))
 
-  for (const [id, view] of views) showView(view, onScreen.has(id))
+  for (const [id, view] of views) {
+    showView(view, onScreen.has(id))
+    // conta pausada voltou pra tela: carrega o WhatsApp (QR de novo)
+    if (onScreen.has(id) && suspended.has(id)) {
+      suspended.delete(id)
+      view.webContents.loadURL(WA_URL)
+    }
+  }
 
   for (const r of rects) {
     const view = views.get(r.id)
@@ -344,27 +365,37 @@ const dragBounds = () => {
 }
 
 // o seletor de contas aparece so no primeiro painel (em foco, o unico); nos
-// outros a coluna do WhatsApp fica como veio
+// outros a coluna do WhatsApp fica como veio.
+// Isto roda a cada mensagem que muda um contador de nao lidas. So recebe o
+// estado completo (com as fotos) quem mostra o seletor ou manda a cor da barra;
+// as demais recebem um "fica quieta" curto, e nada e reenviado se nao mudou.
+const lastSwitcher = new Map() // id -> ultimo estado enviado (JSON)
+
 function pushSwitcher () {
   if (!win || win.isDestroyed()) return
   const host = cfg.layout.panes[0]
-  const state = {
-    accounts: cfg.accounts.map(a => ({
-      id: a.id,
-      name: a.name,
-      color: a.color,
-      avatar: avatars.get(a.id) || null,
-      badge: badges.get(a.id) || 0,
-      onScreen: cfg.layout.panes.includes(a.id),
-      active: a.id === cfg.activeId
-    })),
-    split: cfg.layout.mode !== 'focus',
-    mod: IS_MAC ? '⌘' : 'Ctrl'
-  }
+  const accounts = cfg.accounts.map(a => ({
+    id: a.id,
+    name: a.name,
+    color: a.color,
+    avatar: avatars.get(a.id) || null,
+    badge: badges.get(a.id) || 0,
+    onScreen: cfg.layout.panes.includes(a.id),
+    active: a.id === cfg.activeId
+  }))
   for (const [id, view] of views) {
     if (view.webContents.isDestroyed()) continue
+    const show = id === host
     // reportTheme: a conta focada reenvia a cor (ela pode ter acabado de virar a focada)
-    view.webContents.send('wapp:switcher', { ...state, show: id === host, reportTheme: id === cfg.activeId })
+    const reportTheme = id === cfg.activeId
+    const visible = cfg.layout.panes.includes(id)
+    const state = show || reportTheme
+      ? { accounts, split: cfg.layout.mode !== 'focus', mod: IS_MAC ? '⌘' : 'Ctrl', show, reportTheme, visible }
+      : { accounts: [], show: false, reportTheme: false, visible }
+    const json = JSON.stringify(state)
+    if (lastSwitcher.get(id) === json) continue
+    lastSwitcher.set(id, json)
+    view.webContents.send('wapp:switcher', state)
   }
 }
 
@@ -716,6 +747,69 @@ ipcMain.handle('wa:transcribe', async (event, msgId, wav) => {
   return text
 })
 
+// ---------------------------------------------------------------- economia
+
+// Conta sem login (tela do QR) e fora da tela vira about:blank depois de
+// QR_PAUSE_MS: a pagina de login renova o QR pra sempre e vaza listeners
+// (medido: ~90/min, 8.500 em 2h30). Voltou pra tela, o applyLayout recarrega.
+// Conta logada nunca e pausada: e ela que recebe mensagem e notificacao.
+const QR_PAUSE_MS = 3 * 60 * 1000
+
+ipcMain.on('wa:login-state', (event, state) => {
+  const id = accountOf(event.sender)
+  if (!id || !['in', 'qr', 'loading'].includes(state)) return
+  const prev = loginState.get(id)
+  if (!prev || prev.state !== state) loginState.set(id, { state, since: Date.now() })
+})
+
+function pauseIdleLogins () {
+  const now = Date.now()
+  for (const [id, view] of views) {
+    const st = loginState.get(id)
+    if (!st || st.state !== 'qr' || now - st.since < QR_PAUSE_MS) continue
+    if (cfg.layout.panes.includes(id) || suspended.has(id)) continue
+    suspended.add(id)
+    loginState.delete(id)
+    view.webContents.loadURL('about:blank')
+    perfLog(`pausada ${account(id)?.name || id} (sem login, fora da tela)`)
+  }
+}
+
+// Registro leve pra quando "ficar travado depois de horas": a cada 10 min,
+// a memoria de cada parte do app. Fica em desempenho.log na pasta de dados.
+const PERF_EVERY_MS = 10 * 60 * 1000
+const PERF_MAX = 512 * 1024
+
+function perfLog (line) {
+  const file = path.join(app.getPath('userData'), 'desempenho.log')
+  try {
+    if (fs.existsSync(file) && fs.statSync(file).size > PERF_MAX) fs.renameSync(file, file + '.old')
+    const d = new Date()
+    const p2 = (n) => String(n).padStart(2, '0')
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`
+    fs.appendFileSync(file, `${stamp}  ${line}\n`)
+  } catch { /* log e luxo: nunca derruba o app */ }
+}
+
+function perfSample () {
+  const mb = (kb) => Math.round(kb / 1024)
+  const metrics = app.getAppMetrics()
+  const byPid = new Map(metrics.map(m => [m.pid, m]))
+  let total = 0
+  for (const m of metrics) total += m.memory.workingSetSize
+  const parts = [`total ${mb(total)}MB`]
+  const typeMb = (type) => mb(metrics.filter(m => m.type === type).reduce((s, m) => s + m.memory.workingSetSize, 0))
+  parts.push(`main ${typeMb('Browser')}`, `gpu ${typeMb('GPU')}`)
+  for (const acc of cfg.accounts) {
+    const view = views.get(acc.id)
+    if (!view || view.webContents.isDestroyed()) continue
+    if (suspended.has(acc.id)) { parts.push(`${acc.name} pausada`); continue }
+    const m = byPid.get(view.webContents.getOSProcessId())
+    if (m) parts.push(`${acc.name} ${mb(m.memory.workingSetSize)}MB/${m.cpu.percentCPUUsage.toFixed(1)}%`)
+  }
+  perfLog(parts.join('  '))
+}
+
 // ---------------------------------------------------------------- arrasto da divisoria
 
 function startGutterDrag (index) {
@@ -1036,6 +1130,9 @@ if (!singleInstance) {
       onChange: () => { buildAppMenu(); buildTrayMenu() },
       quit: () => { quitting = true; app.quit() }
     })
+    setInterval(pauseIdleLogins, 60 * 1000)
+    setInterval(perfSample, PERF_EVERY_MS)
+    perfLog(`aberto, versão ${app.getVersion()}`)
   })
 
   app.on('window-all-closed', () => { /* fica na bandeja */ })

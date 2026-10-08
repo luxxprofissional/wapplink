@@ -114,6 +114,15 @@ dados), então rolar a conversa ou reabrir o app não transcreve de novo.
   justamente onde ficam as alças. Enquanto você arrasta, o `main` sobe uma view
   transparente por cima de tudo (`drag.html`) só pra não perder o ponteiro
   quando ele passa por cima do WhatsApp.
+- **Conta sem login fica pausada:** uma conta parada no QR code e fora da tela
+  vira página em branco depois de 3 min (a tela de login do WhatsApp renova o
+  QR pra sempre e vazava ~90 listeners por minuto). Voltou pra tela, recarrega
+  o QR. Conta logada nunca é pausada.
+- **Só quem aparece trabalha:** o seletor de contas e a procura de áudios rodam
+  só na conta que está na tela (e na focada, que manda a cor da barra); o
+  estado do seletor só é reenviado quando muda.
+- **`desempenho.log`** (pasta de dados): a cada 10 min, memória e CPU do app,
+  da GPU e de cada conta. É o que olhar quando "ficar travado depois de horas".
 - **Onde ficam os dados:** `%APPDATA%\WappLink` (Mac:
   `~/Library/Application Support/WappLink`) — `config.json`, `avatars/` e as
   sessões em `Partitions/`. Backup dessa pasta = backup dos logins. Quem veio do

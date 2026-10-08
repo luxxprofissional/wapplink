@@ -126,8 +126,11 @@ async function ensureServer (quality, modelFile) {
   const port = await freePort()
   const threads = Math.max(2, Math.min(8, Math.floor(os.availableParallelism() / 2)))
   const lang = /^pt/i.test(app.getLocale()) ? 'pt' : 'auto'
+  // sem -nt de proposito: sem os tokens de tempo o whisper nao sabe onde
+  // retomar entre um bloco de 30s e o outro, e audio maior que 30s voltava
+  // so com a ultima frase (reproduzido com um audio de 34s)
   const child = spawn(path.join(binDir(), exeName), [
-    '-m', modelFile, '-l', lang, '-t', String(threads), '-nt',
+    '-m', modelFile, '-l', lang, '-t', String(threads),
     '--host', '127.0.0.1', '--port', String(port)
   ], { cwd: binDir(), windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
 
