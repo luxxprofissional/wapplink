@@ -7,6 +7,7 @@ const {
 const path = require('path')
 const fs = require('fs')
 const updater = require('./updater')
+const transcriber = require('./transcribe')
 
 const APP_ID = 'com.luxx.zapbox'
 const WA_URL = 'https://web.whatsapp.com/'
@@ -44,6 +45,7 @@ const DEFAULTS = {
   layout: { mode: 'focus', panes: ['conta-1'], sizes: [1] },
   listOnly: true,   // painel estreito mostra so a lista de conversas
   closeToTray: true,
+  transcribeQuality: 'rapido', // modelo do Whisper: 'rapido' (small) ou 'melhor' (turbo)
   bounds: { width: 1180, height: 820 }
 }
 
@@ -73,6 +75,7 @@ function loadConfig () {
     color: /^#[0-9a-f]{6}$/i.test(a.color) ? a.color : PALETTE[i % PALETTE.length]
   }))
   cfg.layout = { ...DEFAULTS.layout, ...(cfg.layout || {}) }
+  if (!transcriber.MODELS[cfg.transcribeQuality]) cfg.transcribeQuality = DEFAULTS.transcribeQuality
   normalizeLayout()
 }
 
@@ -485,6 +488,7 @@ function stateFor () {
     maxAccounts: MAX_ACCOUNTS,
     closeToTray: cfg.closeToTray,
     listOnly: cfg.listOnly,
+    transcribe: { available: transcriber.available(), quality: cfg.transcribeQuality },
     theme,
     platform: process.platform
   }
@@ -603,6 +607,13 @@ ipcMain.on('settings:avatar', (_e, id) => pickAvatar(id))
 ipcMain.on('settings:avatar-clear', (_e, id) => clearAvatar(id))
 ipcMain.on('settings:close-to-tray', (_e, value) => { cfg.closeToTray = !!value; saveConfig(); pushState() })
 
+ipcMain.on('settings:transcribe-quality', (_e, value) => {
+  if (!transcriber.MODELS[value]) return
+  cfg.transcribeQuality = value
+  saveConfig()
+  pushState()
+})
+
 ipcMain.on('settings:list-only', (_e, value) => {
   cfg.listOnly = !!value
   saveConfig()
@@ -669,6 +680,40 @@ ipcMain.on('wa:notification-click', (event) => {
       return
     }
   }
+})
+
+// ---------------------------------------------------------------- transcricao de audio
+
+function accountOf (sender) {
+  for (const [id, view] of views) if (view.webContents === sender) return id
+  return null
+}
+
+const MSG_ID = /^[A-Za-z0-9_-]{6,80}$/
+const MAX_WAV = 64 * 1024 * 1024 // ~35 min de audio a 16kHz/16 bits
+
+ipcMain.handle('wa:transcribe-available', () => transcriber.available())
+
+ipcMain.handle('wa:transcript-get', (event, msgId) => {
+  const acc = accountOf(event.sender)
+  if (!acc || !MSG_ID.test(String(msgId))) return null
+  return transcriber.getCached(acc + '|' + msgId) || null
+})
+
+ipcMain.handle('wa:transcribe', async (event, msgId, wav) => {
+  const acc = accountOf(event.sender)
+  if (!acc || !MSG_ID.test(String(msgId))) throw new Error('mensagem inválida')
+  if (!(wav instanceof Uint8Array) || wav.length < 44 || wav.length > MAX_WAV) throw new Error('áudio inválido')
+  const key = acc + '|' + msgId
+  const cached = transcriber.getCached(key)
+  if (cached) return cached
+
+  const sender = event.sender
+  const text = await transcriber.transcribe(wav, cfg.transcribeQuality, (status) => {
+    if (!sender.isDestroyed()) sender.send('wapp:transcribe-progress', msgId, status)
+  })
+  transcriber.setCached(key, text)
+  return text
 })
 
 // ---------------------------------------------------------------- arrasto da divisoria
@@ -995,6 +1040,6 @@ if (!singleInstance) {
 
   app.on('window-all-closed', () => { /* fica na bandeja */ })
   app.on('before-quit', () => { quitting = true })
-  app.on('will-quit', () => updater.onQuit())
+  app.on('will-quit', () => { transcriber.shutdown(); updater.onQuit() })
   app.on('activate', () => { if (!win) createWindow(); else showWindow() })
 }

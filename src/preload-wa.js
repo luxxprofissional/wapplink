@@ -1,10 +1,11 @@
 'use strict'
-// Roda dentro de cada aba do WhatsApp Web. Faz tres coisas:
+// Roda dentro de cada aba do WhatsApp Web. Faz quatro coisas:
 //  1. clique na notificacao nativa abre a conta certa;
 //  2. em painel estreito, esconde a area de conversa vazia pra lista ocupar tudo;
 //  3. poe as contas do WappLink na coluna de icones do proprio WhatsApp, no vao
 //     vazio entre o Meta AI e a Midia — e manda a cor dessa coluna pro main
-//     pintar a barra de titulo igual.
+//     pintar a barra de titulo igual;
+//  4. poe "Transcrever" nas mensagens de voz (o texto sai do Whisper, no main).
 const { ipcRenderer, webFrame } = require('electron')
 
 // ---------------------------------------------------------------- notificacao
@@ -85,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   apply()
   new MutationObserver(apply).observe(document.head, { childList: true })
   mountSwitcher()
+  mountTranscriber()
 })
 
 // ---------------------------------------------------------------- contas na coluna
@@ -348,4 +350,235 @@ ipcRenderer.on('wapp:switcher', (_e, state) => {
   swState = state
   if (state.reportTheme) lastTheme = '' // forca reenviar a cor no proximo place()
   render()
+})
+
+// ---------------------------------------------------------------- transcricao
+
+// O audio de voz so existe criptografado no servidor do WhatsApp; quem sabe
+// baixar e abrir e o proprio codigo dele (modulos WAWebCollections e
+// WAWebMediaInMemoryBlobCache — o mesmo caminho do whatsapp-web.js). Isso so
+// e alcancavel no mundo principal, entao uma ponte la responde por
+// postMessage. Baixar NAO marca o audio como ouvido nem a conversa como lida.
+//
+// Na tela, a bolha de voz e achada pelo que nao embaralha: a linha da mensagem
+// tem data-id (o id curto da mensagem), o player e um role="slider" com
+// aria-valuemax (duracao) e a hora fica em data-testid="msg-meta".
+try {
+  webFrame.executeJavaScript(`
+(() => {
+  if (window.__wapplinkAudio) return
+  window.__wapplinkAudio = true
+  addEventListener('message', async (e) => {
+    const d = e.data
+    if (!d || d.wapplink !== 'audio-req' || typeof d.id !== 'string') return
+    const reply = (extra) => window.postMessage(Object.assign({ wapplink: 'audio-res', id: d.id }, extra), location.origin)
+    try {
+      const { Msg } = window.require('WAWebCollections')
+      const msg = Msg.getModelsArray().find(m => m.id && m.id.id === d.id)
+      if (!msg || (msg.type !== 'ptt' && msg.type !== 'audio')) return reply({ error: 'não achei esse áudio na conversa' })
+      await msg.downloadMedia({ downloadEvenIfExpensive: true, rmrReason: 1, isUserInitiated: true })
+      const stage = String((msg.mediaData && msg.mediaData.mediaStage) || '')
+      if (stage.includes('ERROR') || stage === 'FETCHING') return reply({ error: 'o WhatsApp não entregou o áudio (' + stage + ')' })
+      const obj = msg.mediaObject
+      const blob = window.require('WAWebMediaInMemoryBlobCache').InMemoryMediaBlobCache.get(obj && obj.filehash) ||
+        (obj && obj.mediaBlob && obj.mediaBlob.forceToBlob())
+      if (!blob) return reply({ error: 'o WhatsApp não entregou o áudio' })
+      reply({ data: await blob.arrayBuffer() })
+    } catch (err) {
+      reply({ error: 'o WhatsApp mudou por dentro (' + err.message + ')' })
+    }
+  })
+})()
+`).catch(() => { /* pagina ainda sem contexto: nao e fatal */ })
+} catch (err) {
+  console.warn('WappLink: nao consegui montar a ponte de audio -', err.message)
+}
+
+const MSG_ID = /^[A-Za-z0-9_-]{6,80}$/
+const audioWaiting = new Map() // id -> { resolve, reject }
+
+addEventListener('message', (e) => {
+  const d = e.data
+  if (!d || d.wapplink !== 'audio-res') return
+  const p = audioWaiting.get(d.id)
+  if (!p) return
+  audioWaiting.delete(d.id)
+  if (d.error) p.reject(new Error(d.error))
+  else p.resolve(d.data)
+})
+
+function fetchAudio (id) {
+  return new Promise((resolve, reject) => {
+    audioWaiting.set(id, { resolve, reject })
+    window.postMessage({ wapplink: 'audio-req', id }, location.origin)
+    setTimeout(() => {
+      if (audioWaiting.delete(id)) reject(new Error('o WhatsApp demorou demais pra entregar o áudio'))
+    }, 60000)
+  })
+}
+
+// ogg/opus -> WAV 16kHz mono 16 bits, que e o que o Whisper le. Quem decodifica
+// e o proprio Chromium; o contexto em 16kHz ja devolve reamostrado.
+async function toWav16k (data) {
+  const ctx = new OfflineAudioContext(1, 1, 16000)
+  const buf = await ctx.decodeAudioData(data)
+  const n = buf.length
+  const mono = new Float32Array(n)
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const ch = buf.getChannelData(c)
+    for (let i = 0; i < n; i++) mono[i] += ch[i] / buf.numberOfChannels
+  }
+
+  const out = new DataView(new ArrayBuffer(44 + n * 2))
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)) }
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * 2, true); str(8, 'WAVE')
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true)
+  out.setUint32(24, 16000, true); out.setUint32(28, 32000, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true)
+  str(36, 'data'); out.setUint32(40, n * 2, true)
+  for (let i = 0; i < n; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i]))
+    out.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+  return new Uint8Array(out.buffer)
+}
+
+// cor e fonte vem herdadas da bolha (o shadow root nao reseta), entao segue
+// claro/escuro do WhatsApp sem nenhum ajuste nosso
+const TR_CSS = `
+:host { display: block; }
+.box { margin: 4px 2px 2px; font-size: 13px; line-height: 18px; }
+.text {
+  font-size: 14.2px; line-height: 19px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  -webkit-user-select: text; user-select: text; cursor: text;
+}
+.muted { opacity: .62; }
+button {
+  all: unset;
+  cursor: pointer;
+  opacity: .62;
+  font-size: 13px;
+}
+button:hover { opacity: 1; text-decoration: underline; }
+button:focus-visible { opacity: 1; text-decoration: underline; }
+`
+
+let trAvailable = false
+const trState = new Map()        // id -> { phase: idle|busy|done|error, text, status }
+const trRoots = new WeakMap()    // host -> shadow root
+
+function mountTranscriber () {
+  ipcRenderer.invoke('wa:transcribe-available').then((ok) => {
+    trAvailable = !!ok
+    if (!trAvailable) return
+    let pending = false
+    const schedule = () => {
+      if (pending) return
+      pending = true
+      setTimeout(() => { pending = false; scanAudios() }, 250)
+    }
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true })
+    schedule()
+  }).catch(() => { /* main sem o handler: segue sem transcricao */ })
+}
+
+function commonAncestor (a, b) {
+  for (let el = a; el; el = el.parentElement) if (el.contains(b)) return el
+  return null
+}
+
+function scanAudios () {
+  const main = document.getElementById('main')
+  if (!main) return
+  for (const slider of main.querySelectorAll('[data-id] [role="slider"][aria-valuemax]')) {
+    const row = slider.closest('[data-id]')
+    const id = row.getAttribute('data-id')
+    if (!MSG_ID.test(id) || row.querySelector('wapplink-transcricao')) continue
+    const meta = row.querySelector('[data-testid="msg-meta"]')
+    const spot = meta && commonAncestor(slider, meta)
+    if (!spot || spot === row || !row.contains(spot)) continue
+
+    const host = document.createElement('wapplink-transcricao')
+    host.setAttribute('data-msg', id)
+    const root = host.attachShadow({ mode: 'closed' })
+    trRoots.set(host, root)
+    // clique aqui nao e clique na mensagem (o WhatsApp abriria menu/selecao)
+    for (const ev of ['click', 'mousedown', 'dblclick', 'contextmenu']) {
+      host.addEventListener(ev, (e) => e.stopPropagation())
+    }
+    spot.appendChild(host)
+
+    if (!trState.has(id)) {
+      trState.set(id, { phase: 'idle' })
+      ipcRenderer.invoke('wa:transcript-get', id).then((text) => {
+        if (text && trState.get(id).phase === 'idle') setTr(id, { phase: 'done', text })
+      }).catch(() => {})
+    }
+    renderTr(host)
+  }
+}
+
+function setTr (id, st) {
+  trState.set(id, st)
+  for (const host of document.querySelectorAll('wapplink-transcricao')) {
+    if (host.getAttribute('data-msg') === id) renderTr(host)
+  }
+}
+
+function renderTr (host) {
+  const root = trRoots.get(host)
+  if (!root) return
+  const id = host.getAttribute('data-msg')
+  const st = trState.get(id) || { phase: 'idle' }
+  root.textContent = ''
+  const style = document.createElement('style')
+  style.textContent = TR_CSS
+  const box = document.createElement('div')
+  box.className = 'box'
+  root.append(style, box)
+
+  const button = (label) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.addEventListener('click', () => startTranscription(id))
+    return b
+  }
+
+  if (st.phase === 'idle') {
+    box.appendChild(button('Transcrever'))
+  } else if (st.phase === 'busy') {
+    const s = document.createElement('span')
+    s.className = 'muted'
+    s.textContent = st.status || 'Transcrevendo…'
+    box.appendChild(s)
+  } else if (st.phase === 'done') {
+    const t = document.createElement('div')
+    t.className = st.text ? 'text' : 'muted'
+    t.textContent = st.text || 'Nenhuma fala reconhecida.'
+    box.appendChild(t)
+  } else {
+    const s = document.createElement('span')
+    s.className = 'muted'
+    s.textContent = 'Não deu pra transcrever: ' + st.status + '. '
+    box.append(s, button('Tentar de novo'))
+  }
+}
+
+async function startTranscription (id) {
+  if ((trState.get(id) || {}).phase === 'busy') return
+  setTr(id, { phase: 'busy', status: 'Baixando o áudio…' })
+  try {
+    const wav = await toWav16k(await fetchAudio(id))
+    const text = await ipcRenderer.invoke('wa:transcribe', id, wav)
+    setTr(id, { phase: 'done', text })
+  } catch (err) {
+    // o invoke embrulha a mensagem: "Error invoking remote method '...': Error: ..."
+    const msg = String(err && err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    setTr(id, { phase: 'error', status: msg })
+  }
+}
+
+ipcRenderer.on('wapp:transcribe-progress', (_e, id, status) => {
+  if ((trState.get(id) || {}).phase === 'busy') setTr(id, { phase: 'busy', status })
 })

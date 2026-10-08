@@ -62,6 +62,30 @@ Lá dentro dá pra:
 - **Adicionar / remover conta** — até 8. Cada conta é um WhatsApp Web inteiro
   rodando, então o limite é RAM, não código.
 
+## Transcrição de áudio
+
+Embaixo de cada mensagem de voz aparece **Transcrever**, como no celular. O
+texto entra na própria bolha e fica guardado (`transcricoes.json` na pasta de
+dados), então rolar a conversa ou reabrir o app não transcreve de novo.
+
+- **Tudo no computador:** o áudio é transcrito pelo
+  [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (licença MIT), sem
+  mandar nada pra fora. Baixar o áudio pra transcrever não marca como ouvido.
+- **Modelo:** baixado na 1ª transcrição para `whisper/` na pasta de dados, com
+  hash conferido. Normal = `small` (190 MB); *Qualidade máxima* nos ajustes =
+  `large-v3-turbo` (574 MB). Num Ryzen 7 5700X3D, um áudio de 21s leva 3,7s no
+  normal e 12s no máximo (só CPU). Blocos de 30s: áudio curto custa quase igual.
+- **Servidor:** o `whisper-server` sobe na 1ª transcrição e fecha sozinho após
+  10 min parado (devolve a RAM).
+- **Como acha o áudio:** os módulos internos do WhatsApp Web
+  (`WAWebCollections` → `msg.downloadMedia()`), o mesmo caminho do
+  whatsapp-web.js; na tela, a bolha é a linha `[data-id]` que tem um
+  `role="slider"` com `aria-valuemax`. Se o WhatsApp mudar isso, o botão some
+  ou mostra o erro — o resto do app segue normal.
+- **Build:** os binários (11 MB) não ficam no git; `npm run whisper` baixa a
+  versão fixada em `tools/whisper.js` para `vendor/`, e o `npm run release` já
+  faz isso sozinho. Só Windows por enquanto: no Mac o botão não aparece.
+
 ## Atalhos
 
 | Atalho | O que faz |
@@ -132,7 +156,9 @@ src/settings.html      janela flutuante de contas e tela
 src/drag.html          camada transparente usada durante o arrasto
 src/preload-*.js       pontes IPC de cada tela
 src/updater.js         atualização automática (Windows e Mac)
+src/transcribe.js      transcrição de áudio: modelo, whisper-server, fila e cache
 build/logo.png         logo completo; os ícones saem dele
 tools/make-icon.js     recorta o balão do logo e gera icon.png/.ico/-mac.png (npm run icon)
 tools/release.js       sobe o build no GitHub e publica o release
+tools/whisper.js       baixa o whisper.cpp para vendor/ (npm run whisper)
 ```

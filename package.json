@@ -1,7 +1,7 @@
 {
   "name": "wapplink",
   "productName": "WappLink",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Varias contas de WhatsApp Web em uma janela so",
   "main": "src/main.js",
   "author": "Luxx",
@@ -9,6 +9,7 @@
   "private": true,
   "scripts": {
     "icon": "electron tools/make-icon.js",
+    "whisper": "node tools/whisper.js",
     "start": "electron .",
     "dist": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
@@ -53,7 +54,13 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "vendor/whisper/win32-x64",
+          "to": "whisper"
+        }
+      ]
     },
     "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}",

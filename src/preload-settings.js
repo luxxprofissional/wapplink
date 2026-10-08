@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('zap', {
   logout: (id) => ipcRenderer.send('settings:logout', id),
   closeToTray: (value) => ipcRenderer.send('settings:close-to-tray', value),
   listOnly: (value) => ipcRenderer.send('settings:list-only', value),
+  transcribeQuality: (value) => ipcRenderer.send('settings:transcribe-quality', value),
   onState: (cb) => ipcRenderer.on('state', (_e, state) => cb(state))
 })

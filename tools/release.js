@@ -62,6 +62,11 @@ async function build () {
     console.error(`Build só no Windows ou no Mac (aqui é ${process.platform}).`)
     process.exit(1)
   }
+  // o transcritor de audio vai dentro do instalador do Windows; baixa se faltar
+  if (process.platform === 'win32') {
+    const w = spawnSync(process.execPath, [path.join(__dirname, 'whisper.js')], { cwd: root, stdio: 'inherit' })
+    if (w.status !== 0) process.exit(w.status || 1)
+  }
   const env = { ...process.env, GH_TOKEN: token() }
   // os icones ficam versionados em build/; so regenere (npm run icon) se o logo mudar
   const cli = path.join(root, 'node_modules', 'electron-builder', 'cli.js')

@@ -252,6 +252,14 @@
     <label class="opt"><span>Painel estreito mostra só a lista</span><input type="checkbox" id="listonly"></label>
     <label class="opt"><span>Fechar minimiza para a bandeja</span><input type="checkbox" id="tray"></label>
   </div>
+
+  <div id="trbox" hidden>
+    <h2>Transcrição de áudio</h2>
+    <div class="card">
+      <label class="opt"><span>Qualidade máxima (mais lenta)</span><input type="checkbox" id="trbest"></label>
+    </div>
+    <div class="hint">Clique em “Transcrever” embaixo de uma mensagem de voz. O áudio é transcrito neste computador e não é enviado a ninguém. Na 1ª vez o app baixa o modelo de transcrição: 190 MB no normal, 574 MB na qualidade máxima.</div>
+  </div>
 </main>
 
 <footer>
@@ -423,6 +431,7 @@
   document.getElementById('x').onclick = () => zap.close()
   document.getElementById('tray').onchange = (e) => zap.closeToTray(e.target.checked)
   document.getElementById('listonly').onchange = (e) => zap.listOnly(e.target.checked)
+  document.getElementById('trbest').onchange = (e) => zap.transcribeQuality(e.target.checked ? 'melhor' : 'rapido')
   addEventListener('keydown', (e) => { if (e.key === 'Escape') zap.close() })
 
   zap.onState((s) => {
@@ -435,6 +444,9 @@
     if (s.platform === 'darwin') document.querySelectorAll('kbd.mod').forEach(k => { k.textContent = '⌘' })
     document.getElementById('tray').checked = !!s.closeToTray
     document.getElementById('listonly').checked = !!s.listOnly
+    const tr = s.transcribe || {}
+    document.getElementById('trbox').hidden = !tr.available
+    document.getElementById('trbest').checked = tr.quality === 'melhor'
     renderModes()
     renderList()
   })
